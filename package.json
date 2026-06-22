@@ -1,8 +1,13 @@
 {
+  "name": "api-de-autenticacion-robusta",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
   "dependencies": {
-    "express": "^5.2.1",
-    "express-mongo-sanitize": "^2.2.0",
-    "express-validator": "^7.3.2",
-    "mongoose": "^9.7.1"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.3.0"
   }
 }
