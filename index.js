@@ -2,7 +2,8 @@ import express from 'express';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
-import { loginUsuario } from './modules/authController.js';
+import { loginUsuario, registerUsuario } from './modules/authController.js';
+import userRoutes from './modules/user/user.routes.js';
 
 dotenv.config();
 
@@ -13,6 +14,8 @@ app.use(express.json());
 
 // Rutas
 app.post('/api/v2/auth/login', loginUsuario);
+app.post('/api/v2/auth/register', registerUsuario);
+app.use('/api/v2/users', userRoutes);
 app.get('/', (req, res) => res.send('API de Autenticación Robusta'));
 
 const PORT = process.env.PORT || 5100;

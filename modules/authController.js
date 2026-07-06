@@ -1,3 +1,30 @@
+import User from './user/User.model.js';
+
+// POST /api/v2/auth/register — Crear un nuevo usuario
+export const registerUsuario = async (req, res) => {
+  try {
+    const { nombre, correo, password } = req.body;
+
+    if (!nombre || !correo || !password) {
+      return res.status(400).json({ error: 'Nombre, correo y password son obligatorios' });
+    }
+
+    const usuarioExistente = await User.findOne({ correo });
+    if (usuarioExistente) {
+      return res.status(409).json({ error: 'El correo ya está registrado' });
+    }
+
+    const nuevoUsuario = await User.create({ nombre, correo, password });
+
+    res.status(201).json({
+      message: 'Usuario registrado correctamente',
+      usuario: { id: nuevoUsuario._id, nombre: nuevoUsuario.nombre, correo: nuevoUsuario.correo },
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al registrar el usuario' });
+  }
+};
+
 // Simulaci�n de base de datos local r�pida en lo que conectas el modelo
 const usuariosDB = {
   "usuario@correo.com": {
