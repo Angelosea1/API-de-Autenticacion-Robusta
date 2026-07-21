@@ -1,6 +1,21 @@
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import User from './user/User.model.js';
 
-// POST /api/v2/auth/register — Crear un nuevo usuario
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Genera un JWT genérico firmado con JWT_SECRET.
+ * @param {object} payload – Datos a incluir en el token (sin contraseña).
+ * @returns {string} Token JWT firmado.
+ */
+const generarToken = (payload) => {
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '1h',
+  });
+};
+
+// ─── POST /api/v2/auth/register ───────────────────────────────────────────────
 export const registerUsuario = async (req, res) => {
   try {
     const { nombre, correo, password } = req.body;
@@ -14,10 +29,22 @@ export const registerUsuario = async (req, res) => {
       return res.status(409).json({ error: 'El correo ya está registrado' });
     }
 
-    const nuevoUsuario = await User.create({ nombre, correo, password });
+    // Hash de la contraseña antes de guardar
+    const salt = await bcrypt.genSalt(12);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const nuevoUsuario = await User.create({ nombre, correo, password: passwordHash });
+
+    // Emitir token al registrarse (experiencia de onboarding directa)
+    const token = generarToken({
+      id: nuevoUsuario._id,
+      correo: nuevoUsuario.correo,
+      nombre: nuevoUsuario.nombre,
+    });
 
     res.status(201).json({
       message: 'Usuario registrado correctamente',
+      token,
       usuario: { id: nuevoUsuario._id, nombre: nuevoUsuario.nombre, correo: nuevoUsuario.correo },
     });
   } catch (error) {
@@ -25,51 +52,43 @@ export const registerUsuario = async (req, res) => {
   }
 };
 
-// Simulaci�n de base de datos local r�pida en lo que conectas el modelo
-const usuariosDB = {
-  "usuario@correo.com": {
-    password: "PasswordSeguro123!",
-    intentosFallidos: 0,
-    bloqueadoHasta: null
-  }
-};
-
+// ─── POST /api/v2/auth/login ──────────────────────────────────────────────────
 export const loginUsuario = async (req, res) => {
   try {
     const { correo, password } = req.body;
-    const usuario = usuariosDB[correo];
-    
+
+    if (!correo || !password) {
+      return res.status(400).json({ error: 'Correo y password son obligatorios' });
+    }
+
+    // Buscar usuario en MongoDB
+    const usuario = await User.findOne({ correo });
+
+    // Respuesta genérica para evitar enumeración de usuarios
     if (!usuario) {
-      return res.status(401).json({ error: "Credenciales incorrectas" }); // Evita enumeraci�n 
+      return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
-    const ahora = new Date();
-
-    if (usuario.bloqueadoHasta && usuario.bloqueadoHasta > ahora) {
-      const tiempoRestante = Math.ceil((usuario.bloqueadoHasta - ahora) / (1000 * 60));
-      return res.status(403).json({
-        error: `Cuenta bloqueada temporalmente. Intente de nuevo en ${tiempoRestante} minutos.`
-      });
+    // Verificar contraseña con bcrypt
+    const passwordValida = await bcrypt.compare(password, usuario.password);
+    if (!passwordValida) {
+      return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
-    if (usuario.password === password) {
-      usuario.intentosFallidos = 0;
-      usuario.bloqueadoHasta = null;
-      return res.json({ status: "success", message: "Autenticacion exitosa" });
-    } else {
-      usuario.intentosFallidos += 1;
+    // Generar token JWT
+    const token = generarToken({
+      id: usuario._id,
+      correo: usuario.correo,
+      nombre: usuario.nombre,
+    });
 
-      if (usuario.intentosFallidos >= 3) {
-        usuario.bloqueadoHasta = new Date(ahora.getTime() + 15 * 60 * 1000); 
-        usuario.intentosFallidos = 0;
-        return res.status(403).json({
-          error: "Has superado el numero maximo de intentos. Cuenta bloqueada por 15 minutos."
-        });
-      }
-
-      return res.status(401).json({ error: "Credenciales incorrectas" });
-    }
+    res.json({
+      status: 'success',
+      message: 'Autenticación exitosa',
+      token,
+      usuario: { id: usuario._id, nombre: usuario.nombre, correo: usuario.correo },
+    });
   } catch (error) {
-    res.status(500).json({ error: "Error en el proceso de autenticacion" });
+    res.status(500).json({ error: 'Error en el proceso de autenticación' });
   }
 };
